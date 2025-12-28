@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config.dart';
 import '../../services/supabase_service.dart';
-import '../../services/notification_service.dart'; // Importante
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
-
   @override
   State<AdminHomeScreen> createState() => _AdminHomeScreenState();
 }
@@ -20,45 +19,47 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _cargarDatos();
+    _cargarTodo();
+    _activarRealtime();
   }
 
-  Future<void> _cargarDatos() async {
-    setState(() => _cargando = true);
+  // Carga inicial de datos
+  Future<void> _cargarTodo() async {
     try {
       final citasData = await _supabaseService.getCitasDelDia(DateTime.now());
       final esperaData = await _supabaseService.getListaEsperaDetallada();
-      setState(() {
-        _citas = citasData;
-        _espera = esperaData;
-        _cargando = false;
-      });
+      if (mounted) {
+        setState(() {
+          _citas = citasData;
+          _espera = esperaData;
+          _cargando = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _cargando = false);
     }
   }
 
-  Future<void> _cambiarEstado(String id, String estado) async {
-    try {
-      await _supabaseService.actualizarEstadoCita(id, estado);
-      
-      // LÓGICA DE NOTIFICACIÓN AUTOMÁTICA
-      if (estado == 'cancelada' && _espera.isNotEmpty) {
-        await NotificationService.mostrarNotificacion(
-          id: 2,
-          titulo: "¡Turno Disponible!",
-          cuerpo: "Se ha liberado un hueco. ¡Entra rápido para reservar!",
-        );
-      }
+  // SUSCRIPCIÓN REALTIME: Escucha cambios en las tablas y refresca la UI
+  void _activarRealtime() {
+    Supabase.instance.client
+        .channel('admin_updates')
+        .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'citas',
+            callback: (payload) => _cargarTodo())
+        .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'lista_espera',
+            callback: (payload) => _cargarTodo())
+        .subscribe();
+  }
 
-      _cargarDatos();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al actualizar estado")),
-        );
-      }
-    }
+  Future<void> _cambiarEstado(String id, String estado) async {
+    await _supabaseService.actualizarEstadoCita(id, estado);
+    // No hace falta llamar a _cargarTodo aquí porque Realtime lo detectará
   }
 
   @override
@@ -69,88 +70,76 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         appBar: AppBar(
           title: const Text("PANEL BARBERO"),
           bottom: const TabBar(
-            tabs: [
-              Tab(text: "CITAS HOY", icon: Icon(Icons.calendar_today)),
-              Tab(text: "ESPERA", icon: Icon(Icons.people_outline)),
-            ],
             indicatorColor: AppConfig.colorPrimario,
+            tabs: [
+              Tab(icon: Icon(Icons.calendar_today), text: "CITAS"),
+              Tab(icon: Icon(Icons.people), text: "ESPERA"),
+            ],
           ),
           actions: [
-            IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDatos),
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: () async {
                 await _supabaseService.cerrarSesion();
                 if (mounted) Navigator.pushReplacementNamed(context, '/auth');
               },
-            ),
+            )
           ],
         ),
         body: _cargando 
           ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
           : TabBarView(
               children: [
-                _buildTabCitas(),
-                _buildTabEspera(),
+                _buildListaCitas(),
+                _buildListaEspera(),
               ],
             ),
       ),
     );
   }
 
-  Widget _buildTabCitas() {
-    if (_citas.isEmpty) return const Center(child: Text("No hay turnos hoy"));
+  Widget _buildListaCitas() {
+    if (_citas.isEmpty) return const Center(child: Text("No hay turnos para hoy"));
     return ListView.builder(
-      padding: const EdgeInsets.all(10),
       itemCount: _citas.length,
-      itemBuilder: (context, index) {
-        final cita = _citas[index];
+      padding: const EdgeInsets.all(10),
+      itemBuilder: (context, i) {
+        final cita = _citas[i];
         final hora = DateFormat('hh:mm a').format(DateTime.parse(cita['fecha_hora']).toLocal());
-        final estado = cita['estado'];
-
+        
         return Card(
-          color: estado == 'completada' ? Colors.green.withAlpha(30) : Colors.white.withAlpha(10),
           child: ListTile(
             leading: Text(hora, style: const TextStyle(color: AppConfig.colorPrimario, fontWeight: FontWeight.bold)),
             title: Text(cita['perfiles']['nombre'] ?? 'Cliente'),
-            subtitle: Text(cita['servicios']['nombre'] ?? 'Servicio'),
-            trailing: estado == 'confirmada' 
+            subtitle: Text("${cita['servicios']['nombre']} - ${cita['perfiles']['telefono']}"),
+            trailing: cita['estado'] == 'confirmada' 
               ? Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.check_circle, color: Colors.green),
-                      onPressed: () => _cambiarEstado(cita['id'], 'completada'),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.cancel, color: Colors.redAccent),
-                      onPressed: () => _cambiarEstado(cita['id'], 'cancelada'),
-                    ),
+                    IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: () => _cambiarEstado(cita['id'], 'completada')),
+                    IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => _cambiarEstado(cita['id'], 'cancelada')),
                   ],
                 )
-              : Text(estado.toString().toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              : Text(cita['estado'].toString().toUpperCase(), style: const TextStyle(fontSize: 10)),
           ),
         );
       },
     );
   }
 
-  Widget _buildTabEspera() {
-    if (_espera.isEmpty) return const Center(child: Text("Lista de espera vacía"));
+  Widget _buildListaEspera() {
+    if (_espera.isEmpty) return const Center(child: Text("Lista vacía"));
     return ListView.builder(
-      padding: const EdgeInsets.all(10),
       itemCount: _espera.length,
-      itemBuilder: (context, index) {
-        final item = _espera[index];
+      padding: const EdgeInsets.all(10),
+      itemBuilder: (context, i) {
+        final item = _espera[i];
         return Card(
           child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: AppConfig.colorPrimario,
-              child: Text("${index + 1}", style: const TextStyle(color: Colors.black)),
-            ),
-            title: Text(item['perfiles']['nombre'] ?? 'Anónimo'),
-            subtitle: const Text("Esperando turno libre"),
-            trailing: const Icon(Icons.notifications_active, color: Colors.amber),
+            leading: CircleAvatar(child: Text("${i + 1}")),
+            title: Text(item['perfiles']['nombre']),
+            subtitle: Text("WhatsApp: ${item['perfiles']['telefono']}"),
+            trailing: const Icon(Icons.hourglass_bottom, color: Colors.amber),
           ),
         );
       },

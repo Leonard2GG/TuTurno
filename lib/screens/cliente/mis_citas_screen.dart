@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Asegúrate de tener intl en pubspec.yaml
-import '../../config.dart';
+import 'package:intl/intl.dart';
 import '../../services/supabase_service.dart';
+
 
 class MisCitasScreen extends StatefulWidget {
   const MisCitasScreen({super.key});
@@ -12,8 +12,8 @@ class MisCitasScreen extends StatefulWidget {
 
 class _MisCitasScreenState extends State<MisCitasScreen> {
   final _supabaseService = SupabaseService();
-  List<Map<String, dynamic>> _citas = [];
   bool _cargando = true;
+  List<Map<String, dynamic>> _misCitas = [];
 
   @override
   void initState() {
@@ -24,37 +24,27 @@ class _MisCitasScreenState extends State<MisCitasScreen> {
   Future<void> _cargarCitas() async {
     setState(() => _cargando = true);
     try {
-      final data = await _supabaseService.getMisCitas();
+      final citas = await _supabaseService.getMisCitas();
       setState(() {
-        _citas = data;
+        _misCitas = citas;
         _cargando = false;
       });
     } catch (e) {
       setState(() => _cargando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error al cargar citas: $e")),
+      );
     }
   }
 
-  Future<void> _confirmarCancelacion(String citaId) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("¿Cancelar turno?"),
-        content: const Text("Esta acción permitirá que otra persona tome el lugar."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("NO")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("SÍ, CANCELAR", style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      try {
-        await _supabaseService.cancelarCita(citaId);
-        _cargarCitas();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cita cancelada")));
-      } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al cancelar")));
-      }
+  Future<void> _cancelar(String id) async {
+    try {
+      await _supabaseService.cancelarCita(id);
+      _cargarCitas();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No se pudo cancelar la cita")),
+      );
     }
   }
 
@@ -63,38 +53,30 @@ class _MisCitasScreenState extends State<MisCitasScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Mis Turnos")),
       body: _cargando
-          ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
-          : _citas.isEmpty
-              ? const Center(child: Text("No tienes citas registradas", style: TextStyle(color: Colors.grey)))
-              : RefreshIndicator(
-                  onRefresh: _cargarCitas,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _citas.length,
-                    itemBuilder: (context, index) {
-                      final cita = _citas[index];
-                      final fecha = DateTime.parse(cita['fecha_hora']).toLocal();
-                      final esCancelada = cita['estado'] == 'cancelada';
+          ? const Center(child: CircularProgressIndicator())
+          : _misCitas.isEmpty
+              ? const Center(child: Text("No tienes citas programadas"))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(15),
+                  itemCount: _misCitas.length,
+                  itemBuilder: (context, index) {
+                    final cita = _misCitas[index];
+                    final fecha = DateTime.parse(cita['fecha_hora']).toLocal();
+                    final formateada = DateFormat('dd/MM - hh:mm a').format(fecha);
 
-                      return Card(
-                        color: esCancelada ? Colors.black26 : Colors.white.withAlpha(20),
-                        margin: const EdgeInsets.only(bottom: 15),
-                        child: ListTile(
-                          title: Text(cita['servicios']['nombre'], style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            decoration: esCancelada ? TextDecoration.lineThrough : null
-                          )),
-                          subtitle: Text(DateFormat('dd/MM/yyyy - hh:mm a').format(fecha)),
-                          trailing: esCancelada 
-                            ? const Text("CANCELADA", style: TextStyle(color: Colors.red, fontSize: 10))
-                            : IconButton(
-                                icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
-                                onPressed: () => _confirmarCancelacion(cita['id']),
-                              ),
-                        ),
-                      );
-                    },
-                  ),
+                    return Card(
+                      child: ListTile(
+                        title: Text(cita['servicios']['nombre']),
+                        subtitle: Text(formateada),
+                        trailing: cita['estado'] == 'confirmada'
+                            ? IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                onPressed: () => _cancelar(cita['id']),
+                              )
+                            : Text(cita['estado'].toUpperCase()),
+                      ),
+                    );
+                  },
                 ),
     );
   }

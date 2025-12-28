@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../config.dart';
 import '../../services/supabase_service.dart';
 import 'reserva_screen.dart';
-import 'mis_citas_screen.dart'; // Nueva importación
 
 class HomeCliente extends StatefulWidget {
   const HomeCliente({super.key});
@@ -19,10 +18,10 @@ class _HomeClienteState extends State<HomeCliente> {
   @override
   void initState() {
     super.initState();
-    _cargarDatos();
+    _cargarServicios();
   }
 
-  Future<void> _cargarDatos() async {
+  Future<void> _cargarServicios() async {
     try {
       final data = await _supabaseService.getServicios();
       setState(() {
@@ -30,12 +29,7 @@ class _HomeClienteState extends State<HomeCliente> {
         _cargando = false;
       });
     } catch (e) {
-      if (mounted) {
-        setState(() => _cargando = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error de conexión: $e"), backgroundColor: Colors.red),
-        );
-      }
+      setState(() => _cargando = false);
     }
   }
 
@@ -43,18 +37,12 @@ class _HomeClienteState extends State<HomeCliente> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("TUTURNO"),
+        title: const Text("TuTurno"),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_month), // Botón para ver mis citas
-            onPressed: () => Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => const MisCitasScreen())
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _cargarDatos,
+            icon: const Icon(Icons.calendar_month, color: AppConfig.colorPrimario),
+            onPressed: () => Navigator.pushNamed(context, '/mis_citas'),
+            tooltip: "Mis Turnos",
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -62,81 +50,111 @@ class _HomeClienteState extends State<HomeCliente> {
               await _supabaseService.cerrarSesion();
               if (mounted) Navigator.pushReplacementNamed(context, '/auth');
             },
-          )
+          ),
         ],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
-          : _servicios.isEmpty
-              ? _buildPantallaVacia()
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _servicios.length,
-                  itemBuilder: (context, index) {
-                    final servicio = _servicios[index];
-                    return Card(
-                      color: Colors.white.withAlpha(20),
-                      margin: const EdgeInsets.only(bottom: 15),
-                      child: ListTile(
-                        title: Text(servicio['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("${servicio['duracion_minutos']} min"),
-                        trailing: Text("\$${servicio['precio']}", 
-                          style: const TextStyle(color: AppConfig.colorPrimario, fontSize: 18)),
-                        onTap: () => _mostrarAlertaReserva(servicio),
-                      ),
-                    );
-                  },
-                ),
-    );
-  }
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "¡Hola de nuevo!",
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const Text("¿Qué servicio necesitas hoy?", 
+                    style: TextStyle(color: Colors.grey)),
+                  
+                  const SizedBox(height: 30),
 
-  Widget _buildPantallaVacia() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.info_outline, size: 60, color: Colors.grey),
-          const SizedBox(height: 16),
-          const Text("No hay servicios disponibles", style: TextStyle(fontSize: 18, color: Colors.grey)),
-          const SizedBox(height: 8),
-          const Text("Asegúrate de agregar servicios en Supabase", style: TextStyle(color: Colors.white54)),
-          TextButton(onPressed: _cargarDatos, child: const Text("REINTENTAR"))
-        ],
-      ),
-    );
-  }
+                  // SECCIÓN: SERVICIOS
+                  const Text("Nuestros Servicios", 
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 15),
+                  
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _servicios.length,
+                    itemBuilder: (context, index) {
+                      final servicio = _servicios[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 15),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          title: Text(servicio['nombre'], 
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("${servicio['duracion_minutos']} min - \$${servicio['precio']}"),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 15, color: AppConfig.colorPrimario),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ReservaScreen(servicio: servicio),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
 
-  void _mostrarAlertaReserva(Map<String, dynamic> servicio) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppConfig.colorFondo,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        height: 200,
-        child: Column(
-          children: [
-            Text("Reservar ${servicio['nombre']}", 
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppConfig.colorPrimario),
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ReservaScreen(servicio: servicio),
+                  const SizedBox(height: 20),
+
+                  // SECCIÓN: LISTA DE ESPERA
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.white24)
                     ),
-                  );
-                },
-                child: const Text("CONTINUAR", style: TextStyle(color: Colors.black)),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.hourglass_empty, color: Colors.amber, size: 40),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "¿No hay turnos disponibles?",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const Text(
+                          "Únete a la lista de espera y te avisaremos si alguien cancela.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 15),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber,
+                            foregroundColor: Colors.black,
+                          ),
+                          onPressed: () async {
+                            try {
+                              await _supabaseService.unirseAListaEspera();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("¡Te has unido a la lista de espera!")),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Ya estás en la lista")),
+                                );
+                              }
+                            }
+                          },
+                          child: const Text("UNIRME AHORA"),
+                        )
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            )
-          ],
-        ),
-      ),
+            ),
     );
   }
 }
