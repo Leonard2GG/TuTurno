@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../config.dart';
 import '../../services/supabase_service.dart';
+import '../../services/notification_service.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
+
   @override
   State<AdminHomeScreen> createState() => _AdminHomeScreenState();
 }
@@ -23,7 +27,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     _activarRealtime();
   }
 
-  // Carga inicial de datos
+  // 1. CARGA INICIAL DE DATOS
   Future<void> _cargarTodo() async {
     try {
       final citasData = await _supabaseService.getCitasDelDia(DateTime.now());
@@ -40,7 +44,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     }
   }
 
-  // SUSCRIPCIÓN REALTIME: Escucha cambios en las tablas y refresca la UI
+  // 2. SUSCRIPCIÓN REALTIME (Escucha cambios y notifica)
   void _activarRealtime() {
     Supabase.instance.client
         .channel('admin_updates')
@@ -48,18 +52,43 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'citas',
-            callback: (payload) => _cargarTodo())
+            callback: (payload) {
+              _cargarTodo();
+              // Opcional: Notificar si es una nueva cita
+              if (payload.eventType == PostgresChangeEvent.insert) {
+                NotificationService.mostrarNotificacion(
+                  id: 10,
+                  titulo: "¡Nueva Reserva!",
+                  cuerpo: "Un cliente ha agendado un nuevo turno.",
+                );
+              }
+            })
         .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'lista_espera',
-            callback: (payload) => _cargarTodo())
+            callback: (payload) {
+              _cargarTodo();
+              if (payload.eventType == PostgresChangeEvent.insert) {
+                NotificationService.mostrarNotificacion(
+                  id: 11,
+                  titulo: "Lista de Espera",
+                  cuerpo: "Alguien se acaba de unir a la lista de espera.",
+                );
+              }
+            })
         .subscribe();
   }
 
-  Future<void> _cambiarEstado(String id, String estado) async {
-    await _supabaseService.actualizarEstadoCita(id, estado);
-    // No hace falta llamar a _cargarTodo aquí porque Realtime lo detectará
+  // 3. ACCIONES: CONTACTAR CLIENTE
+  Future<void> _contactarCliente(String? telefono) async {
+    if (telefono == null || telefono.isEmpty) return;
+    final url = "https://wa.me/$telefono?text=Hola! Te escribo de la barbería.";
+    if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No se pudo abrir WhatsApp")),
+      );
+    }
   }
 
   @override
@@ -71,9 +100,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           title: const Text("PANEL BARBERO"),
           bottom: const TabBar(
             indicatorColor: AppConfig.colorPrimario,
+            labelColor: AppConfig.colorPrimario,
             tabs: [
-              Tab(icon: Icon(Icons.calendar_today), text: "CITAS"),
-              Tab(icon: Icon(Icons.people), text: "ESPERA"),
+              Tab(icon: Icon(Icons.calendar_today), text: "AGENDA"),
+              Tab(icon: Icon(Icons.hourglass_top), text: "ESPERA"),
             ],
           ),
           actions: [
@@ -90,56 +120,58 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
           : TabBarView(
               children: [
-                _buildListaCitas(),
-                _buildListaEspera(),
+                _buildTabCitas(),
+                _buildTabEspera(),
               ],
             ),
       ),
     );
   }
 
-  Widget _buildListaCitas() {
-    if (_citas.isEmpty) return const Center(child: Text("No hay turnos para hoy"));
+  Widget _buildTabCitas() {
+    if (_citas.isEmpty) return const Center(child: Text("Sin turnos hoy"));
     return ListView.builder(
       itemCount: _citas.length,
       padding: const EdgeInsets.all(10),
       itemBuilder: (context, i) {
         final cita = _citas[i];
-        final hora = DateFormat('hh:mm a').format(DateTime.parse(cita['fecha_hora']).toLocal());
+        final fecha = DateTime.parse(cita['fecha_hora']).toLocal();
+        final hora = DateFormat('hh:mm a').format(fecha);
         
         return Card(
           child: ListTile(
             leading: Text(hora, style: const TextStyle(color: AppConfig.colorPrimario, fontWeight: FontWeight.bold)),
             title: Text(cita['perfiles']['nombre'] ?? 'Cliente'),
-            subtitle: Text("${cita['servicios']['nombre']} - ${cita['perfiles']['telefono']}"),
-            trailing: cita['estado'] == 'confirmada' 
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: () => _cambiarEstado(cita['id'], 'completada')),
-                    IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => _cambiarEstado(cita['id'], 'cancelada')),
-                  ],
-                )
-              : Text(cita['estado'].toString().toUpperCase(), style: const TextStyle(fontSize: 10)),
+            subtitle: Text("${cita['servicios']['nombre']}"),
+            trailing: IconButton(
+              icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green), 
+              onPressed: () => _contactarCliente(cita['perfiles']['telefono']),
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildListaEspera() {
-    if (_espera.isEmpty) return const Center(child: Text("Lista vacía"));
+Widget _buildTabEspera() {
+    if (_espera.isEmpty) return const Center(child: Text("Nadie en espera"));
     return ListView.builder(
       itemCount: _espera.length,
       padding: const EdgeInsets.all(10),
-      itemBuilder: (context, i) {
-        final item = _espera[i];
+      itemBuilder: (context, index) {
+        final item = _espera[index];
         return Card(
           child: ListTile(
-            leading: CircleAvatar(child: Text("${i + 1}")),
+            leading: CircleAvatar(
+              backgroundColor: AppConfig.colorPrimario,
+              child: Text("${index + 1}", style: const TextStyle(color: Colors.black)),
+            ),
             title: Text(item['perfiles']['nombre']),
-            subtitle: Text("WhatsApp: ${item['perfiles']['telefono']}"),
-            trailing: const Icon(Icons.hourglass_bottom, color: Colors.amber),
+            subtitle: const Text("Esperando un espacio..."),
+            trailing: IconButton(
+              icon: const FaIcon(FontAwesomeIcons.message, color: Colors.amber, size: 20),
+              onPressed: () => _contactarCliente(item['perfiles']['telefono']),
+            ),
           ),
         );
       },
