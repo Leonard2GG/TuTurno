@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../services/supabase_service.dart';
 import '../../services/notification_service.dart';
 import '../../config.dart';
@@ -40,7 +41,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               _cargarDatos();
               if (p.eventType == PostgresChangeEvent.insert) {
                 NotificationService.mostrarNotificacion(
-                    id: 1, titulo: "Nueva Cita", cuerpo: "Un cliente reservó un turno.");
+                  id: 1, titulo: "Nueva Cita", cuerpo: "Un cliente reservo un turno.");
               }
             })
         .onPostgresChanges(
@@ -89,7 +90,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("PANEL BARBERO"),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: Text('Panel Barbero', style: GoogleFonts.poppins(color: AppConfig.colorPrimario, fontWeight: FontWeight.bold)),
           actions: [
             IconButton(
               icon: const Icon(Icons.content_cut),
@@ -109,7 +112,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               },
             ),
           ],
-          bottom: const TabBar(
+          bottom: TabBar(
             indicatorColor: AppConfig.colorPrimario,
             tabs: [
               Tab(text: "AGENDA HOY", icon: Icon(Icons.calendar_today)),
@@ -117,35 +120,29 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             ],
           ),
         ),
-        body: _cargando
-            ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
-            : TabBarView(
-                children: [
-                  _buildAgendaList(),
-                  _buildEsperaList(),
-                ],
-              ),
+        body: _cargando ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario)) : TabBarView(children: [_buildAgendaList(), _buildEsperaList()]),
       ),
     );
   }
 
   Widget _buildAgendaList() {
-    if (_citas.isEmpty) return const Center(child: Text("No hay citas programadas"));
+    if (_citas.isEmpty) return Center(child: Text('No hay citas programadas', style: GoogleFonts.poppins()));
     return ListView.builder(
+      padding: const EdgeInsets.all(12),
       itemCount: _citas.length,
       itemBuilder: (context, i) {
         final c = _citas[i];
         final hora = DateFormat('hh:mm a').format(DateTime.parse(c['fecha_hora']).toLocal());
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          color: Colors.grey[900],
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: ListTile(
-            leading: Text(hora, style: const TextStyle(fontWeight: FontWeight.bold, color: AppConfig.colorPrimario)),
-            title: Text(c['perfiles']['nombre'] ?? "Cliente"),
-            subtitle: Text(c['servicios']['nombre'] ?? "Servicio"),
-            trailing: IconButton(
-              icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green),
-              onPressed: () => _abrirWhatsApp(c['perfiles']['telefono']),
-            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            leading: CircleAvatar(backgroundColor: AppConfig.colorPrimario, child: Text(hora.split(' ')[0], style: GoogleFonts.poppins(color: Colors.black, fontWeight: FontWeight.bold))),
+            title: Text(c['perfiles']['nombre'] ?? 'Cliente', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            subtitle: Text(c['servicios']['nombre'] ?? 'Servicio', style: GoogleFonts.poppins()),
+            trailing: IconButton(icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green), onPressed: () => _abrirWhatsApp(c['perfiles']['telefono'])),
           ),
         );
       },
@@ -153,21 +150,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   Widget _buildEsperaList() {
-    if (_espera.isEmpty) return const Center(child: Text("Lista de espera vacía"));
+    if (_espera.isEmpty) return Center(child: Text('Lista de espera vacia', style: GoogleFonts.poppins()));
     return ListView.builder(
+      padding: const EdgeInsets.all(12),
       itemCount: _espera.length,
       itemBuilder: (context, i) {
         final e = _espera[i];
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          color: Colors.grey[900],
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: ListTile(
-            leading: CircleAvatar(backgroundColor: AppConfig.colorPrimario, child: Text("${i + 1}")),
-            title: Text(e['perfiles']['nombre'] ?? "Cliente"),
-            subtitle: const Text("Esperando turno..."),
-            trailing: IconButton(
-              icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green),
-              onPressed: () => _abrirWhatsApp(e['perfiles']['telefono']),
-            ),
+            leading: CircleAvatar(backgroundColor: AppConfig.colorPrimario, child: Text('${i + 1}', style: GoogleFonts.poppins(color: Colors.black, fontWeight: FontWeight.bold))),
+            title: Text(e['perfiles']['nombre'] ?? 'Cliente', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            subtitle: Text('Esperando turno...', style: GoogleFonts.poppins()),
+            trailing: IconButton(icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green), onPressed: () => _abrirWhatsApp(e['perfiles']['telefono'])),
           ),
         );
       },

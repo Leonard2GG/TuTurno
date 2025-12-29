@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../services/supabase_service.dart';
 import '../../config.dart';
 import 'reserva_screen.dart';
@@ -54,71 +55,72 @@ class _HomeClienteState extends State<HomeCliente> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("BARBERIA TUTURNO"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text("TuTurno", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppConfig.colorPrimario)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const MisCitasScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await _service.cerrarSesion();
-              Navigator.pushReplacementNamed(context, '/auth');
-            },
-          ),
+          IconButton(icon: const Icon(Icons.history), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MisCitasScreen()))),
+          IconButton(icon: const Icon(Icons.logout), onPressed: () async { await _service.cerrarSesion(); Navigator.pushReplacementNamed(context, '/auth'); }),
         ],
       ),
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
-          : Column(
+      body: _cargando ? const Center(child: CircularProgressIndicator()) : Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
               children: [
-                // Banner de Lista de Espera
-                _buildEsperaBanner(),
-                
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    "Nuestros Servicios",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                ),
-
-                Expanded(
-                  child: _servicios.isEmpty
-                      ? const Center(child: Text("No hay servicios disponibles"))
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          itemCount: _servicios.length,
-                          itemBuilder: (context, i) {
-                            final s = _servicios[i];
-                            return Card(
-                              elevation: 4,
-                              margin: const EdgeInsets.only(bottom: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.all(15),
-                                title: Text(s['nombre'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                                subtitle: Text("${s['duracion_minutos']} min | \$${s['precio']}"),
-                                trailing: ElevatedButton(
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ReservaScreen(servicio: s),
-                                    ),
-                                  ),
-                                  child: const Text("RESERVAR"),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
+                Expanded(child: Text('Nuestros Servicios', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600))),
+                ElevatedButton.icon(
+                  onPressed: _unirseEspera,
+                  icon: const Icon(Icons.people),
+                  label: const Text('Lista de espera'),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppConfig.colorPrimario, foregroundColor: Colors.black),
+                )
               ],
             ),
+          ),
+          Expanded(
+            child: _servicios.isEmpty ? Center(child: Text('No hay servicios disponibles', style: GoogleFonts.poppins())) : GridView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.85, mainAxisSpacing: 12, crossAxisSpacing: 12),
+              itemCount: _servicios.length,
+              itemBuilder: (context, i) {
+                final s = _servicios[i];
+                return GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ReservaScreen(servicio: s))),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[900],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppConfig.colorPrimario.withAlpha((0.2 * 255).round())),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: Center(child: Icon(Icons.content_cut, size: 48, color: AppConfig.colorPrimario))),
+                        const SizedBox(height: 8),
+                        Text(s['nombre'], style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        Text('${s['duracion_minutos']} min • \$${s['precio']}', style: GoogleFonts.poppins(color: Colors.white70)),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ReservaScreen(servicio: s))),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppConfig.colorPrimario, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                            child: const Text('RESERVAR'),
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          )
+        ],
+      ),
     );
   }
 
@@ -128,7 +130,7 @@ class _HomeClienteState extends State<HomeCliente> {
       margin: const EdgeInsets.all(15),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppConfig.colorPrimario.withOpacity(0.1),
+        color: AppConfig.colorPrimario.withAlpha((0.1 * 255).round()),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppConfig.colorPrimario, width: 2),
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/supabase_service.dart';
 import '../../config.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -57,67 +58,83 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(25),
-          child: Form(
-            key: _formKey,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppConfig.colorFondo, AppConfig.colorFondo.withAlpha((0.95 * 255).round())],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
             child: Column(
               children: [
-                Text(_esLogin ? "Bienvenido" : "Crea tu Cuenta",
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppConfig.colorPrimario)),
-                const SizedBox(height: 30),
-                if (!_esLogin) ...[
-                  TextFormField(
-                    controller: _nombreController,
-                    decoration: const InputDecoration(labelText: "Nombre Completo", prefixIcon: Icon(Icons.person)),
-                    validator: (v) => v!.isEmpty ? "Obligatorio" : null,
-                  ),
-                  const SizedBox(height: 15),
-                  TextFormField(
-                    controller: _telefonoController,
-                    keyboardType: TextInputType.number,
-                    maxLength: 8,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(8),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: "Teléfono (8 dígitos)",
-                      prefixText: "+53 ",
-                      prefixIcon: Icon(Icons.phone_android),
-                      counterText: "",
-                    ),
-                    validator: (v) => v!.length != 8 ? "Deben ser 8 números" : null,
-                  ),
-                ],
-                const SizedBox(height: 15),
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.email)),
-                  validator: (v) => !v!.contains('@') ? "Email inválido" : null,
+                CircleAvatar(
+                  radius: 48,
+                  backgroundColor: AppConfig.colorPrimario,
+                  child: Text('T', style: GoogleFonts.poppins(fontSize: 36, color: Colors.black, fontWeight: FontWeight.bold)),
                 ),
-                const SizedBox(height: 15),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: "Contraseña", prefixIcon: Icon(Icons.lock)),
-                  validator: (v) => v!.length < 6 ? "Mínimo 6 caracteres" : null,
-                ),
-                const SizedBox(height: 30),
-                _cargando 
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppConfig.colorPrimario,
-                        minimumSize: const Size(double.infinity, 50)),
-                      onPressed: _procesar,
-                      child: Text(_esLogin ? "ENTRAR" : "REGISTRARME", style: const TextStyle(color: Colors.black)),
+                const SizedBox(height: 18),
+                Text(_esLogin ? 'Bienvenido a TuTurno' : 'Crea tu cuenta', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w600, color: AppConfig.colorAcento)),
+                const SizedBox(height: 18),
+                Card(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 10,
+                  color: Colors.grey[900],
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          if (!_esLogin) ...[
+                            TextFormField(
+                              controller: _nombreController,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: const InputDecoration(labelText: 'Nombre completo', prefixIcon: Icon(Icons.person)),
+                              validator: (v) => v!.isEmpty ? 'Obligatorio' : null,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _telefonoController,
+                              keyboardType: TextInputType.number,
+                              maxLength: 8,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                              style: const TextStyle(color: Colors.white),
+                              decoration: const InputDecoration(labelText: 'Telefono (8 digitos)', prefixText: '+53 ', prefixIcon: Icon(Icons.phone_android), counterText: ''),
+                              validator: (v) => v!.length != 8 ? 'Deben ser 8 numeros' : null,
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          TextFormField(
+                            controller: _emailController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email)),
+                            validator: (v) => !v!.contains('@') ? 'Email invalido' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(labelText: 'Contrasenia', prefixIcon: Icon(Icons.lock)),
+                            validator: (v) => v!.length < 6 ? 'Minimo 6 caracteres' : null,
+                          ),
+                          const SizedBox(height: 18),
+                          _cargando ? const CircularProgressIndicator() : SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: AppConfig.colorPrimario, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                              onPressed: _procesar,
+                              child: Text(_esLogin ? 'ENTRAR' : 'REGISTRARME', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          TextButton(onPressed: () => setState(() => _esLogin = !_esLogin), child: Text(_esLogin ? 'No tienes cuenta? Registrate' : 'Ya tienes cuenta? Inicia Sesion', style: const TextStyle(color: Colors.white70)))
+                        ],
+                      ),
                     ),
-                TextButton(
-                  onPressed: () => setState(() => _esLogin = !_esLogin),
-                  child: Text(_esLogin ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia Sesión"),
-                )
+                  ),
+                ),
               ],
             ),
           ),

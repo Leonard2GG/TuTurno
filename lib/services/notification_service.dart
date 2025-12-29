@@ -1,12 +1,19 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:supabase/supabase.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../config.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
+      // inicializar Hive en el isolate de background para deduplicacion
+      try {
+        await Hive.initFlutter();
+        if (!Hive.isBoxOpen('tuturno_notified')) await Hive.openBox('tuturno_notified');
+      } catch (_) {}
+
       final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseKey);
 
       final ahoraUtc = DateTime.now().toUtc();
@@ -18,8 +25,9 @@ void callbackDispatcher() {
           .eq('negocio_id', AppConfig.negocioId)
           .neq('estado', 'cancelada');
 
-      if (res is List && res.isNotEmpty) {
-        final nuevos = res.where((item) {
+      final listRes = res as List;
+      if (listRes.isNotEmpty) {
+        final nuevos = listRes.where((item) {
           try {
             final ca = item['created_at'];
             final ce = item['creado_en'];
@@ -39,7 +47,13 @@ void callbackDispatcher() {
           const initSettings = InitializationSettings(android: androidInit);
           await fln.initialize(initSettings);
 
+          final Box? notifiedBox = Hive.isBoxOpen('tuturno_notified') ? Hive.box('tuturno_notified') : null;
+
           for (var item in nuevos) {
+            final id = item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+            final already = notifiedBox?.get(id) == true;
+            if (already) continue;
+
             final nid = DateTime.now().millisecondsSinceEpoch ~/ 1000;
             await fln.show(
               nid,
@@ -54,6 +68,10 @@ void callbackDispatcher() {
                 ),
               ),
             );
+
+            try {
+              await notifiedBox?.put(id, true);
+            } catch (_) {}
           }
         }
       }
@@ -72,6 +90,9 @@ class NotificationService {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidInit);
     await _fln.initialize(initSettings);
+
+    // Nota: solicitar permisos en Android 13+ requiere manejo via Permission API
+    // No llamamos a un metodo inexistente en el plugin aqui.
 
     await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
 

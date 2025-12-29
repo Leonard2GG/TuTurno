@@ -5,6 +5,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Definiciones seguras para versionCode/versionName usadas por Flutter.
+// Intentamos leer las propiedades generadas por Flutter; si no existen, usamos valores por defecto.
+val flutterVersionCode: Int = (project.findProperty("flutter.versionCode") as? String)?.toIntOrNull() ?: 1
+val flutterVersionName: String = (project.findProperty("flutter.versionName") as? String) ?: "1.0.0"
+
 android {
     namespace = "com.example.tuturno"
     compileSdk = flutter.compileSdkVersion
@@ -27,7 +32,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 21
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutterVersionCode.toInteger()
+        versionCode = flutterVersionCode
         versionName = flutterVersionName
     }
 

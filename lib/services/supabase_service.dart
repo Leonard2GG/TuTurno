@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:workmanager/workmanager.dart';
 import '../config.dart';
+import 'offline_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class SupabaseService {
   final _supabase = Supabase.instance.client;
@@ -52,13 +54,23 @@ class SupabaseService {
 
   Future<void> crearCita({required String servicioId, required DateTime fechaHora}) async {
     final user = _supabase.auth.currentUser;
-    await _supabase.from('citas').insert({
+    final cita = {
       'negocio_id': AppConfig.negocioId,
       'cliente_id': user!.id,
       'servicio_id': servicioId,
       'fecha_hora': fechaHora.toIso8601String(),
-    });
-    await _supabase.from('lista_espera').delete().eq('cliente_id', user.id);
+    };
+
+    // Intentamos enviar directamente, si falla o no hay conexion, encolamos
+    try {
+      final conn = await Connectivity().checkConnectivity();
+      if (conn == ConnectivityResult.none) throw Exception('Sin conexion');
+
+      await _supabase.from('citas').insert(cita);
+      await _supabase.from('lista_espera').delete().eq('cliente_id', user.id);
+    } catch (e) {
+      await OfflineService.enqueueCita(cita);
+    }
   }
 
   // --- LISTA DE ESPERA ---

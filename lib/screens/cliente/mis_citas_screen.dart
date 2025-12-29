@@ -79,12 +79,12 @@ class _MisCitasScreenState extends State<MisCitasScreen> {
                       final esCancelada = cita['estado'] == 'cancelada';
 
                       return Card(
-                        color: esCancelada ? Colors.grey.withOpacity(0.1) : null,
+                        color: esCancelada ? Colors.grey.withAlpha((0.1 * 255).round()) : null,
                         margin: const EdgeInsets.only(bottom: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                           side: BorderSide(
-                            color: esCancelada ? Colors.transparent : AppConfig.colorPrimario.withOpacity(0.5),
+                            color: esCancelada ? Colors.transparent : AppConfig.colorPrimario.withAlpha((0.5 * 255).round()),
                           ),
                         ),
                         child: ListTile(

@@ -10,4 +10,5 @@ class AppConfig {
 
   static const Color colorPrimario = Color(0xFFFFD700); // Dorado
   static const Color colorFondo = Color(0xFF121212); // Negro mate
+  static const Color colorAcento = Color(0xFFFFFFFF); // Blanco
 }

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'services/notification_service.dart';
 import 'services/supabase_service.dart';
+import 'services/offline_service.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/cliente/home_cliente.dart';
 import 'screens/cliente/mis_citas_screen.dart';
@@ -16,6 +17,9 @@ void main() async {
     url: AppConfig.supabaseUrl,
     anonKey: AppConfig.supabaseKey,
   );
+
+  // Inicializar Hive y el servicio offline antes de arrancar la app
+  await OfflineService.init();
 
   await NotificationService.inicializar();
 

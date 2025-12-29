@@ -42,7 +42,7 @@ class _GestionServiciosScreenState extends State<GestionServiciosScreen> {
           children: [
             TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: "Nombre (ej: Corte)")),
             TextField(controller: precioCtrl, decoration: const InputDecoration(labelText: "Precio"), keyboardType: TextInputType.number),
-            TextField(controller: duracionCtrl, decoration: const InputDecoration(labelText: "Duración (minutos)"), keyboardType: TextInputType.number),
+            TextField(controller: duracionCtrl, decoration: const InputDecoration(labelText: "Duracion (minutos)"), keyboardType: TextInputType.number),
           ],
         ),
         actions: [
