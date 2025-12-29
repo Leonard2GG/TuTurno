@@ -1,83 +1,102 @@
 import 'package:flutter/material.dart';
-import '../../config.dart';
 import '../../services/supabase_service.dart';
+import '../../config.dart';
 
 class ReservaScreen extends StatefulWidget {
   final Map<String, dynamic> servicio;
   const ReservaScreen({super.key, required this.servicio});
+
   @override
   State<ReservaScreen> createState() => _ReservaScreenState();
 }
 
 class _ReservaScreenState extends State<ReservaScreen> {
-  final _supabaseService = SupabaseService();
+  final _service = SupabaseService();
   DateTime _fecha = DateTime.now();
-  String? _hora;
-  List<String> _ocupadas = [];
-
-  final List<String> _horarios = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+  DateTime? _horaSeleccionada;
+  List<DateTime> _disponibles = [];
+  bool _cargando = false;
 
   @override
   void initState() {
     super.initState();
-    _cargar();
+    _generarTurnos();
   }
 
-  _cargar() async {
-    final res = await _supabaseService.getHorasOcupadas(_fecha);
-    setState(() => _ocupadas = res);
-  }
+  Future<void> _generarTurnos() async {
+    setState(() => _cargando = true);
+    final config = await _service.getHorarioConfig();
+    final ocupadas = await _service.getHorasOcupadas(_fecha);
+    
+    List<DateTime> temporal = [];
 
-  bool _esPasada(String h) {
-    final ahora = DateTime.now();
-    if (_fecha.day != ahora.day) return false;
-    final hInt = int.parse(h.split(':')[0]);
-    return hInt <= ahora.hour;
+    void agregarRango(String inicio, String fin) {
+      DateTime horaActual = DateTime(_fecha.year, _fecha.month, _fecha.day, 
+          int.parse(inicio.split(':')[0]), int.parse(inicio.split(':')[1]));
+      DateTime horaFin = DateTime(_fecha.year, _fecha.month, _fecha.day, 
+          int.parse(fin.split(':')[0]), int.parse(fin.split(':')[1]));
+
+      while (horaActual.isBefore(horaFin)) {
+        if (!ocupadas.any((o) => o.hour == horaActual.hour && o.minute == horaActual.minute)) {
+          temporal.add(horaActual);
+        }
+        horaActual = horaActual.add(Duration(minutes: config['duracion_turno_minutos']));
+      }
+    }
+
+    agregarRango(config['h_inicio_manana'], config['h_fin_manana']);
+    if (config['almuerzo_activo']) {
+      agregarRango(config['h_inicio_tarde'], config['h_fin_tarde']);
+    }
+
+    setState(() {
+      _disponibles = temporal;
+      _cargando = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Reservar Turno")),
+      appBar: AppBar(title: Text("Reservar ${widget.servicio['nombre']}")),
       body: Column(
         children: [
           CalendarDatePicker(
-            initialDate: _fecha, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 30)),
-            onDateChanged: (d) { setState(() => _fecha = d); _cargar(); }
+            initialDate: _fecha,
+            firstDate: DateTime.now(),
+            lastDate: DateTime.now().add(const Duration(days: 15)),
+            onDateChanged: (d) {
+              setState(() => _fecha = d);
+              _generarTurnos();
+            },
           ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(15),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 2.5, mainAxisSpacing: 10, crossAxisSpacing: 10),
-              itemCount: _horarios.length,
-              itemBuilder: (context, i) {
-                final h = _horarios[i];
-                final bloqueada = _ocupadas.contains(h) || _esPasada(h);
-                return InkWell(
-                  onTap: bloqueada ? null : () => setState(() => _hora = h),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: bloqueada ? Colors.white10 : (_hora == h ? AppConfig.colorPrimario : Colors.white24),
-                      borderRadius: BorderRadius.circular(10)
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(h, style: TextStyle(color: bloqueada ? Colors.white30 : (_hora == h ? Colors.black : Colors.white))),
+            child: _cargando 
+              ? const Center(child: CircularProgressIndicator())
+              : GridView.builder(
+                  padding: const EdgeInsets.all(15),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4, childAspectRatio: 2.5, mainAxisSpacing: 10, crossAxisSpacing: 10
                   ),
-                );
-              },
-            ),
+                  itemCount: _disponibles.length,
+                  itemBuilder: (context, i) {
+                    final h = _disponibles[i];
+                    bool esSel = _horaSeleccionada == h;
+                    return ActionChip(
+                      backgroundColor: esSel ? AppConfig.colorPrimario : Colors.white10,
+                      label: Text("${h.hour}:${h.minute.toString().padLeft(2, '0')}", 
+                        style: TextStyle(color: esSel ? Colors.black : Colors.white)),
+                      onPressed: () => setState(() => _horaSeleccionada = h),
+                    );
+                  },
+                ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppConfig.colorPrimario, minimumSize: const Size(double.infinity, 55)),
-              onPressed: _hora == null ? null : () async {
-                final dt = DateTime(_fecha.year, _fecha.month, _fecha.day, int.parse(_hora!.split(':')[0]));
-                await _supabaseService.crearCita(servicioId: widget.servicio['id'], fechaHora: dt);
-                Navigator.pop(context);
-              },
-              child: const Text("CONFIRMAR TURNO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
+          ElevatedButton(
+            onPressed: _horaSeleccionada == null ? null : () async {
+              await _service.crearCita(servicioId: widget.servicio['id'], fechaHora: _horaSeleccionada!);
+              Navigator.pop(context);
+            },
+            child: const Text("CONFIRMAR"),
           )
         ],
       ),

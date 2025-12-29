@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 
 class AppConfig {
-  // NOMBRE DE LA APLICACIÓN
-  static const String nombreApp = "Tuturno";
+  static const String nombreApp = "TuTurno Cuba";
+  static const String negocioId = '00000000-0000-0000-0000-000000000000';
+  
+  // Tus credenciales de Supabase
+  static const String supabaseUrl = 'https://ofmblpylpwyttgltvypf.supabase.co';
+  static const String supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mbWJscHlscHd5dHRnbHR2eXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0MjMzNjAsImV4cCI6MjA1NDAwMTM2MH0.2YhK9mX-o1uK_096mE9pG1_8v6x7l-o-l-o-l-o';
 
-  // ID DEL NEGOCIO 
-  // IMPORTANTE: Ve a tu tabla 'negocios' en Supabase, crea una fila y pega el ID aquí.
-  static const String negocioId = '4b87cc36-2484-43c9-961e-8276e2375c43';
-
-  // PERSONALIZACIÓN ESTÉTICA
-  static const Color colorPrimario = Color(0xFFFFD700); // Dorado Barbería
-  static const Color colorFondo = Color(0xFF121212);   // Negro Elegante
-  static const Color colorAcento = Color(0xFFFFFFFF);  // Blanco
+  static const Color colorPrimario = Color(0xFFFFD700); // Dorado
+  static const Color colorFondo = Color(0xFF121212); // Negro mate
 }

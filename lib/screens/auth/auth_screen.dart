@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Necesario para FilteringTextInputFormatter
+import 'package:flutter/services.dart';
 import '../../services/supabase_service.dart';
 import '../../config.dart';
 
@@ -21,13 +21,6 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _cargando = false;
   final _supabaseService = SupabaseService();
 
-  // Validación: Solo debe haber 8 dígitos
-  String? _validarTelefonoCuba(String? value) {
-    if (value == null || value.isEmpty) return "El teléfono es obligatorio";
-    if (value.length != 8) return "Deben ser exactamente 8 dígitos";
-    return null;
-  }
-
   Future<void> _procesar() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -39,14 +32,14 @@ class _AuthScreenState extends State<AuthScreen> {
           _passwordController.text.trim(),
         );
       } else {
-        // LÓGICA: Añadimos el +53 automáticamente al enviar
-        String telefonoCompleto = "+53${_telefonoController.text.trim()}";
-
+        // Lógica para Cuba: +53 + 8 dígitos
+        String telefonoFinal = "+53${_telefonoController.text.trim()}";
+        
         await _supabaseService.registrarUsuario(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
           nombre: _nombreController.text.trim(),
-          telefono: telefonoCompleto, // Se envía +53xxxxxxxx
+          telefono: telefonoFinal,
         );
       }
       
@@ -71,41 +64,34 @@ class _AuthScreenState extends State<AuthScreen> {
             key: _formKey,
             child: Column(
               children: [
-                Text(
-                  _esLogin ? "Bienvenido" : "Crea tu Cuenta",
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppConfig.colorPrimario),
-                ),
+                Text(_esLogin ? "Bienvenido" : "Crea tu Cuenta",
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppConfig.colorPrimario)),
                 const SizedBox(height: 30),
-                
                 if (!_esLogin) ...[
                   TextFormField(
                     controller: _nombreController,
                     decoration: const InputDecoration(labelText: "Nombre Completo", prefixIcon: Icon(Icons.person)),
-                    validator: (v) => v!.isEmpty ? "El nombre es obligatorio" : null,
+                    validator: (v) => v!.isEmpty ? "Obligatorio" : null,
                   ),
                   const SizedBox(height: 15),
-                  
-                  // CAMPO DE TELÉFONO CONFIGURADO PARA CUBA
                   TextFormField(
                     controller: _telefonoController,
                     keyboardType: TextInputType.number,
-                    maxLength: 8, // Limita visualmente a 8 caracteres
+                    maxLength: 8,
                     inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly, // Solo permite números
-                      LengthLimitingTextInputFormatter(8),    // Bloquea el teclado al llegar a 8
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(8),
                     ],
                     decoration: const InputDecoration(
-                      labelText: "Teléfono Móvil",
-                      hintText: "5xxxxxxx",
-                      prefixText: "+53 ", // Se muestra como etiqueta fija pero no se edita
+                      labelText: "Teléfono (8 dígitos)",
+                      prefixText: "+53 ",
                       prefixIcon: Icon(Icons.phone_android),
-                      counterText: "", // Oculta el contador de caracteres para mayor limpieza
+                      counterText: "",
                     ),
-                    validator: _validarTelefonoCuba,
+                    validator: (v) => v!.length != 8 ? "Deben ser 8 números" : null,
                   ),
-                  const SizedBox(height: 15),
                 ],
-                
+                const SizedBox(height: 15),
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.email)),
@@ -119,18 +105,15 @@ class _AuthScreenState extends State<AuthScreen> {
                   validator: (v) => v!.length < 6 ? "Mínimo 6 caracteres" : null,
                 ),
                 const SizedBox(height: 30),
-                
                 _cargando 
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppConfig.colorPrimario,
-                        minimumSize: const Size(double.infinity, 50),
-                      ),
+                        minimumSize: const Size(double.infinity, 50)),
                       onPressed: _procesar,
                       child: Text(_esLogin ? "ENTRAR" : "REGISTRARME", style: const TextStyle(color: Colors.black)),
                     ),
-                
                 TextButton(
                   onPressed: () => setState(() => _esLogin = !_esLogin),
                   child: Text(_esLogin ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia Sesión"),

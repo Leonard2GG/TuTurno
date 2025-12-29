@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../../config.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/supabase_service.dart';
 import '../../services/notification_service.dart';
+import '../../config.dart';
+import 'gestion_servicios_screen.dart'; // Asegúrate de crear este archivo
+import 'config_horario_screen.dart';    // Asegúrate de crear este archivo
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -15,7 +17,7 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
-  final _supabaseService = SupabaseService();
+  final _service = SupabaseService();
   List<Map<String, dynamic>> _citas = [];
   List<Map<String, dynamic>> _espera = [];
   bool _cargando = true;
@@ -23,71 +25,61 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _cargarTodo();
-    _activarRealtime();
+    _cargarDatos();
+    _escucharRealtime();
   }
 
-  // 1. CARGA INICIAL DE DATOS
-  Future<void> _cargarTodo() async {
-    try {
-      final citasData = await _supabaseService.getCitasDelDia(DateTime.now());
-      final esperaData = await _supabaseService.getListaEsperaDetallada();
-      if (mounted) {
-        setState(() {
-          _citas = citasData;
-          _espera = esperaData;
-          _cargando = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _cargando = false);
-    }
-  }
-
-  // 2. SUSCRIPCIÓN REALTIME (Escucha cambios y notifica)
-  void _activarRealtime() {
+  void _escucharRealtime() {
     Supabase.instance.client
-        .channel('admin_updates')
+        .channel('admin_changes')
         .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'citas',
-            callback: (payload) {
-              _cargarTodo();
-              // Opcional: Notificar si es una nueva cita
-              if (payload.eventType == PostgresChangeEvent.insert) {
+            callback: (p) {
+              _cargarDatos();
+              if (p.eventType == PostgresChangeEvent.insert) {
                 NotificationService.mostrarNotificacion(
-                  id: 10,
-                  titulo: "¡Nueva Reserva!",
-                  cuerpo: "Un cliente ha agendado un nuevo turno.",
-                );
+                    id: 1, titulo: "Nueva Cita", cuerpo: "Un cliente reservó un turno.");
               }
             })
         .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'lista_espera',
-            callback: (payload) {
-              _cargarTodo();
-              if (payload.eventType == PostgresChangeEvent.insert) {
-                NotificationService.mostrarNotificacion(
-                  id: 11,
-                  titulo: "Lista de Espera",
-                  cuerpo: "Alguien se acaba de unir a la lista de espera.",
-                );
-              }
-            })
+            callback: (p) => _cargarDatos())
         .subscribe();
   }
 
-  // 3. ACCIONES: CONTACTAR CLIENTE
-  Future<void> _contactarCliente(String? telefono) async {
-    if (telefono == null || telefono.isEmpty) return;
-    final url = "https://wa.me/$telefono?text=Hola! Te escribo de la barbería.";
+  Future<void> _cargarDatos() async {
+    try {
+      final resCitas = await Supabase.instance.client
+          .from('citas')
+          .select('*, perfiles(nombre, telefono), servicios(nombre)')
+          .eq('negocio_id', AppConfig.negocioId)
+          .neq('estado', 'cancelada')
+          .order('fecha_hora');
+
+      final resEspera = await Supabase.instance.client
+          .from('lista_espera')
+          .select('*, perfiles(nombre, telefono)')
+          .eq('negocio_id', AppConfig.negocioId)
+          .order('creado_en');
+
+      setState(() {
+        _citas = List<Map<String, dynamic>>.from(resCitas);
+        _espera = List<Map<String, dynamic>>.from(resEspera);
+        _cargando = false;
+      });
+    } catch (e) {
+      debugPrint("Error cargando datos: $e");
+    }
+  }
+
+  Future<void> _abrirWhatsApp(String tel) async {
+    final url = "https://wa.me/$tel";
     if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No se pudo abrir WhatsApp")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo abrir WhatsApp")));
     }
   }
 
@@ -98,54 +90,61 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text("PANEL BARBERO"),
-          bottom: const TabBar(
-            indicatorColor: AppConfig.colorPrimario,
-            labelColor: AppConfig.colorPrimario,
-            tabs: [
-              Tab(icon: Icon(Icons.calendar_today), text: "AGENDA"),
-              Tab(icon: Icon(Icons.hourglass_top), text: "ESPERA"),
-            ],
-          ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.content_cut),
+              tooltip: "Gestionar Servicios",
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GestionServiciosScreen())).then((_) => _cargarDatos()),
+            ),
+            IconButton(
+              icon: const Icon(Icons.access_time),
+              tooltip: "Configurar Horario",
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ConfigHorarioScreen())),
+            ),
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: () async {
-                await _supabaseService.cerrarSesion();
-                if (mounted) Navigator.pushReplacementNamed(context, '/auth');
+                await _service.cerrarSesion();
+                Navigator.pushReplacementNamed(context, '/auth');
               },
-            )
-          ],
-        ),
-        body: _cargando 
-          ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
-          : TabBarView(
-              children: [
-                _buildTabCitas(),
-                _buildTabEspera(),
-              ],
             ),
+          ],
+          bottom: const TabBar(
+            indicatorColor: AppConfig.colorPrimario,
+            tabs: [
+              Tab(text: "AGENDA HOY", icon: Icon(Icons.calendar_today)),
+              Tab(text: "LISTA ESPERA", icon: Icon(Icons.people)),
+            ],
+          ),
+        ),
+        body: _cargando
+            ? const Center(child: CircularProgressIndicator(color: AppConfig.colorPrimario))
+            : TabBarView(
+                children: [
+                  _buildAgendaList(),
+                  _buildEsperaList(),
+                ],
+              ),
       ),
     );
   }
 
-  Widget _buildTabCitas() {
-    if (_citas.isEmpty) return const Center(child: Text("Sin turnos hoy"));
+  Widget _buildAgendaList() {
+    if (_citas.isEmpty) return const Center(child: Text("No hay citas programadas"));
     return ListView.builder(
       itemCount: _citas.length,
-      padding: const EdgeInsets.all(10),
       itemBuilder: (context, i) {
-        final cita = _citas[i];
-        final fecha = DateTime.parse(cita['fecha_hora']).toLocal();
-        final hora = DateFormat('hh:mm a').format(fecha);
-        
+        final c = _citas[i];
+        final hora = DateFormat('hh:mm a').format(DateTime.parse(c['fecha_hora']).toLocal());
         return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           child: ListTile(
-            leading: Text(hora, style: const TextStyle(color: AppConfig.colorPrimario, fontWeight: FontWeight.bold)),
-            title: Text(cita['perfiles']['nombre'] ?? 'Cliente'),
-            subtitle: Text("${cita['servicios']['nombre']}"),
+            leading: Text(hora, style: const TextStyle(fontWeight: FontWeight.bold, color: AppConfig.colorPrimario)),
+            title: Text(c['perfiles']['nombre'] ?? "Cliente"),
+            subtitle: Text(c['servicios']['nombre'] ?? "Servicio"),
             trailing: IconButton(
-              icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green), 
-              onPressed: () => _contactarCliente(cita['perfiles']['telefono']),
+              icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green),
+              onPressed: () => _abrirWhatsApp(c['perfiles']['telefono']),
             ),
           ),
         );
@@ -153,24 +152,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-Widget _buildTabEspera() {
-    if (_espera.isEmpty) return const Center(child: Text("Nadie en espera"));
+  Widget _buildEsperaList() {
+    if (_espera.isEmpty) return const Center(child: Text("Lista de espera vacía"));
     return ListView.builder(
       itemCount: _espera.length,
-      padding: const EdgeInsets.all(10),
-      itemBuilder: (context, index) {
-        final item = _espera[index];
+      itemBuilder: (context, i) {
+        final e = _espera[i];
         return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: AppConfig.colorPrimario,
-              child: Text("${index + 1}", style: const TextStyle(color: Colors.black)),
-            ),
-            title: Text(item['perfiles']['nombre']),
-            subtitle: const Text("Esperando un espacio..."),
+            leading: CircleAvatar(backgroundColor: AppConfig.colorPrimario, child: Text("${i + 1}")),
+            title: Text(e['perfiles']['nombre'] ?? "Cliente"),
+            subtitle: const Text("Esperando turno..."),
             trailing: IconButton(
-              icon: const FaIcon(FontAwesomeIcons.message, color: Colors.amber, size: 20),
-              onPressed: () => _contactarCliente(item['perfiles']['telefono']),
+              icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green),
+              onPressed: () => _abrirWhatsApp(e['perfiles']['telefono']),
             ),
           ),
         );

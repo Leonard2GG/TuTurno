@@ -1,77 +1,66 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'dart:io';
+import 'package:workmanager/workmanager.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config.dart';
 
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _notificationsPlugin =
-      FlutterLocalNotificationsPlugin();
+  static final _notifications = FlutterLocalNotificationsPlugin();
 
-  static Future<void> inicializar() async {
-    // 1. Configuración para Android
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    // 2. Configuración para iOS
-    const DarwinInitializationSettings initializationSettingsIOS =
-        DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+  static Future<void> init() async {
+    const settings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
+    await _notifications.initialize(settings);
+    
+    // Inicializar Workmanager para tareas de fondo
+    Workmanager().initialize(callbackDispatcher);
+  }
 
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
+  static void mostrarNotificacion({required int id, required String titulo, required String cuerpo}) {
+    _notifications.show(
+      id,
+      titulo,
+      cuerpo,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'canal_citas',
+          'Notificaciones de Citas',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+        ),
+      ),
     );
+  }
+}
 
-    // 3. Inicializar el plugin
-    await _notificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (details) {
-        // Aquí podrías manejar qué pasa cuando el usuario toca la notificación
-        print("Notificación tocada: ${details.payload}");
-      },
-    );
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    // Usamos las credenciales centralizadas de AppConfig
+    final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseKey);
+    
+    try {
+      final ahora = DateTime.now().toUtc();
+      // Buscamos citas creadas en los últimos 16 minutos (margen de seguridad)
+      final hace15Min = ahora.subtract(const Duration(minutes: 16)).toIso8601String();
 
-    // 4. Crear canal de importancia alta para Android
-    if (Platform.isAndroid) {
-      await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(const AndroidNotificationChannel(
-            'alertas_barberia', // ID del canal
-            'Alertas de Turnos', // Nombre visible
-            description: 'Notificaciones sobre citas y lista de espera',
-            importance: Importance.max,
-            playSound: true,
-          ));
-      
-      // Solicitar permisos explícitos (Android 13+)
-      await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+      final List<dynamic> data = await client
+          .from('citas')
+          .select()
+          .eq('negocio_id', AppConfig.negocioId)
+          .gte('creado_en', hace15Min);
+
+      if (data.isNotEmpty) {
+        NotificationService.mostrarNotificacion(
+          id: 99,
+          titulo: "Nuevo turno reservado",
+          cuerpo: "Tienes una nueva cita en tu agenda.",
+        );
+      }
+    } catch (e) {
+      print("Error en Workmanager: $e");
     }
-  }
-
-  // Método para mostrar una notificación instantánea
-  static Future<void> mostrarNotificacion({
-    required int id,
-    required String titulo,
-    required String cuerpo,
-  }) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'alertas_barberia',
-      'Alertas de Turnos',
-      importance: Importance.max,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-    );
-
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
-    );
-
-    await _notificationsPlugin.show(id, titulo, cuerpo, platformDetails);
-  }
+    return Future.value(true);
+  });
 }
