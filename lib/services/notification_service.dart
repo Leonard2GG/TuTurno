@@ -1,66 +1,104 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 import '../config.dart';
-
-class NotificationService {
-  static final _notifications = FlutterLocalNotificationsPlugin();
-
-  static Future<void> init() async {
-    const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    );
-    await _notifications.initialize(settings);
-    
-    // Inicializar Workmanager para tareas de fondo
-    Workmanager().initialize(callbackDispatcher);
-  }
-
-  static void mostrarNotificacion({required int id, required String titulo, required String cuerpo}) {
-    _notifications.show(
-      id,
-      titulo,
-      cuerpo,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'canal_citas',
-          'Notificaciones de Citas',
-          importance: Importance.max,
-          priority: Priority.high,
-          showWhen: true,
-        ),
-      ),
-    );
-  }
-}
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    // Usamos las credenciales centralizadas de AppConfig
-    final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseKey);
-    
     try {
-      final ahora = DateTime.now().toUtc();
-      // Buscamos citas creadas en los últimos 16 minutos (margen de seguridad)
-      final hace15Min = ahora.subtract(const Duration(minutes: 16)).toIso8601String();
+      final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseKey);
 
-      final List<dynamic> data = await client
+      final ahoraUtc = DateTime.now().toUtc();
+      final desde = ahoraUtc.subtract(const Duration(minutes: 15));
+
+      final res = await client
           .from('citas')
-          .select()
+          .select('id, fecha_hora, created_at, creado_en')
           .eq('negocio_id', AppConfig.negocioId)
-          .gte('creado_en', hace15Min);
+          .neq('estado', 'cancelada');
 
-      if (data.isNotEmpty) {
-        NotificationService.mostrarNotificacion(
-          id: 99,
-          titulo: "Nuevo turno reservado",
-          cuerpo: "Tienes una nueva cita en tu agenda.",
-        );
+      if (res is List && res.isNotEmpty) {
+        final nuevos = res.where((item) {
+          try {
+            final ca = item['created_at'];
+            final ce = item['creado_en'];
+            DateTime? fechaCreado;
+            if (ca != null) fechaCreado = DateTime.parse(ca).toUtc();
+            if (fechaCreado == null && ce != null) fechaCreado = DateTime.parse(ce).toUtc();
+            if (fechaCreado == null) return false;
+            return fechaCreado.isAfter(desde);
+          } catch (_) {
+            return false;
+          }
+        }).toList();
+
+        if (nuevos.isNotEmpty) {
+          final fln = FlutterLocalNotificationsPlugin();
+          const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+          const initSettings = InitializationSettings(android: androidInit);
+          await fln.initialize(initSettings);
+
+          for (var item in nuevos) {
+            final nid = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+            await fln.show(
+              nid,
+              'Nueva cita',
+              'Se registro una nueva cita',
+              NotificationDetails(
+                android: AndroidNotificationDetails(
+                  'tuturno_channel',
+                  'TuTurno',
+                  importance: Importance.max,
+                  priority: Priority.high,
+                ),
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
-      print("Error en Workmanager: $e");
+      // Ignorar errores en el callback de background
     }
+
     return Future.value(true);
   });
+}
+
+class NotificationService {
+  static final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
+
+  static Future<void> inicializar() async {
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidInit);
+    await _fln.initialize(initSettings);
+
+    await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+
+    try {
+      await Workmanager().registerPeriodicTask(
+        'tuturno_check_citas',
+        'checkCitas',
+        frequency: const Duration(minutes: 15),
+        existingWorkPolicy: ExistingWorkPolicy.keep,
+        initialDelay: const Duration(minutes: 1),
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> mostrarNotificacion({required int id, required String titulo, required String cuerpo}) async {
+    await _fln.show(
+      id,
+      titulo,
+      cuerpo,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'tuturno_channel',
+          'TuTurno',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+      ),
+    );
+  }
 }

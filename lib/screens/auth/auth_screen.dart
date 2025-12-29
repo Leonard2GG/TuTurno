@@ -32,7 +32,7 @@ class _AuthScreenState extends State<AuthScreen> {
           _passwordController.text.trim(),
         );
       } else {
-        // Lógica para Cuba: +53 + 8 dígitos
+        // Logica para Cuba: +53 + 8 digitos
         String telefonoFinal = "+53${_telefonoController.text.trim()}";
         
         await _supabaseService.registrarUsuario(

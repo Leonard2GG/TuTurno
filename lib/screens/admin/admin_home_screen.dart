@@ -6,8 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/supabase_service.dart';
 import '../../services/notification_service.dart';
 import '../../config.dart';
-import 'gestion_servicios_screen.dart'; // Asegúrate de crear este archivo
-import 'config_horario_screen.dart';    // Asegúrate de crear este archivo
+import 'gestion_servicios_screen.dart'; // Asegurate de crear este archivo
+import 'config_horario_screen.dart';    // Asegurate de crear este archivo
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});

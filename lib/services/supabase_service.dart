@@ -5,7 +5,7 @@ import '../config.dart';
 class SupabaseService {
   final _supabase = Supabase.instance.client;
 
-  // --- AUTENTICACIÓN ---
+  // --- AUTENTICACION ---
   Future<void> registrarUsuario({
     required String email,
     required String password,
@@ -35,7 +35,7 @@ class SupabaseService {
     return data['rol'] ?? 'cliente';
   }
 
-  // --- GESTIÓN DE CITAS (CLIENTE) ---
+  // --- GESTION DE CITAS (CLIENTE) ---
   Future<List<Map<String, dynamic>>> getMisCitas() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return [];
@@ -93,7 +93,7 @@ class SupabaseService {
     return (data as List).map((c) => DateTime.parse(c['fecha_hora']).toLocal()).toList();
   }
 
-  // --- GESTIÓN DE SERVICIOS (BARBERO) ---
+  // --- GESTION DE SERVICIOS (BARBERO) ---
   Future<List<Map<String, dynamic>>> getServicios() async {
     return await _supabase
         .from('servicios')
@@ -123,7 +123,7 @@ class SupabaseService {
     await _supabase.from('servicios').update({'activo': false}).eq('id', id);
   }
 
-  // --- CIERRE DE SESIÓN ---
+  // --- CIERRE DE SESION ---
   Future<void> cerrarSesion() async {
     try {
       await Workmanager().cancelAll();
